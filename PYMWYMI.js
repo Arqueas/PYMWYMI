@@ -2493,7 +2493,7 @@ const suitabilityColors = {
 };
 
 // 🔸 Helper to classify distance type
-function classifyDistanceType(meters, targetDistance, tolerance = 100) {
+function classifyDistanceType(meters, targetDistance) {
   if (!meters) return "unknown";
 
   // Use targetDistance if available to determine the type with tolerance
