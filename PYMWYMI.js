@@ -31,7 +31,6 @@ const pbRunnerNameSelector = ".f1zqw56";
 let elSelector = "";
 
 function execute(html) {
-    alert("z");
     rawHtml = html;
     getData();
 }
