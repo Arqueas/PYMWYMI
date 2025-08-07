@@ -591,7 +591,7 @@ function getWeightedSuitabilityLabel(score, weight) {
 // Categorize raw distance (meters) into short/mid/long
 function categorizeDistance(meters) {
   if (meters <= 1200 || isDistanceCloseEnough(meters, 1200)) return 'short';
-  if (meters <= 1800 || isDistanceCloseEnough(meters, 1800)) return 'mid';
+  if (meters <= 1800 || isDistanceCloseEnough(meters, 1600)) return 'mid';
   return 'long';
 }
 
@@ -613,12 +613,18 @@ function normalizeCondition(cond) {
     return 'good'; // default fallback
 }
 
+function getDistanceTolerance(meters) {
+  if (meters <= 1200) return 100;
+  if (meters <= 1600) return 200;
+  return null; // stayers
+}
 
-function isDistanceCloseEnough(runDistance, targetDistance, distanceTolerance = 100) {
+function isDistanceCloseEnough(runDistance, targetDistance) {
+  const distanceTolerance = getDistanceTolerance(targetDistance);
   const diff = Math.abs(runDistance - targetDistance);
 
-  // Strict tolerance
-  if (diff <= distanceTolerance) return true;
+  // Strict tolerance, if distanceTolerance is null, it means long distances, any runs are accepted except anything more than 200m south
+  if ((distanceTolerance == null && (targetDistance - runDistance <= 200)) || diff <= distanceTolerance) return true;
 
   // Also allow if difference is less than 10% of targetDistance (for scaled closeness)
   if (diff <= targetDistance * 0.1) return true;
@@ -1311,7 +1317,7 @@ function assessReturnFromBreak(runner, meters, targetCondition) {
   const improvementAmount = formScores[formScores.length - 1] - formScores[0];
 
   // Check if pre-break run was strong at relevant dist/cond
-  const isRelevantDistance = isDistanceCloseEnough(lastGoodRun.distance, meters, 75);
+  const isRelevantDistance = isDistanceCloseEnough(lastGoodRun.distance, meters);
   const isSameCond = normalizeCondition(lastGoodRun.condition) === normalizeCondition(targetCondition);
   const strongBefore = lastGoodRun.competitiveScore >= 65;
 
@@ -1745,7 +1751,8 @@ function assessBurstPotential(runner, condition) {
   };
 }
 
-function assessDistanceSuitability(runner, meters, distanceTolerance = 100) {
+function assessDistanceSuitability(runner, meters) {
+  const distanceTolerance = getDistanceTolerance(meters);
   const weights = runner.scoreWeights;
   const fallbackRawScore = 25;
   const fallbackScore = fallbackRawScore * weights.distanceWeight;
@@ -2490,13 +2497,13 @@ function classifyDistanceType(meters, targetDistance, tolerance = 100) {
   if (!meters) return "unknown";
 
   // Use targetDistance if available to determine the type with tolerance
-  if (targetDistance && isDistanceCloseEnough(meters, 1200, tolerance)) return "sprint";
-  if (targetDistance && isDistanceCloseEnough(meters, 1400, tolerance)) return "mid";
-  if (targetDistance && isDistanceCloseEnough(meters, 1800, tolerance)) return "long";
+  if (targetDistance && isDistanceCloseEnough(meters, 1200)) return "sprint";
+  if (targetDistance && isDistanceCloseEnough(meters, 1600)) return "mid";
+  if (targetDistance) return "long";
 
   // Fallback: hard-coded categories
   if (meters <= 1200) return "sprint";
-  if (meters <= 1800) return "mid";
+  if (meters <= 1600) return "mid";
   return "long";
 }
 
