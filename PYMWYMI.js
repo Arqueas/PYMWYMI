@@ -5,16 +5,7 @@ const response = {
     raceInfo: null
 };
 
-// Call requestHtmlFromApp when your page loads or when ready
-window.onload = () => {
-    requestHtmlFromApp();
-};
-
 let rawHtml = null;
-function requestHtmlFromApp() {
-    // This will trigger the C# Navigating event
-    window.location.href = "myapp://request-html";
-}
 
 function receiveHtml(jsonEscapedHtml) {
     // jsonEscapedHtml is a JSON-style escaped string (with \uXXXX etc)
@@ -28,17 +19,6 @@ function receiveHtml(jsonEscapedHtml) {
     rawHtml = decodedHtml;
 
     getData();
-}
-
-
-function decodeUnicodeHtml(escapedHtml) {
-    try {
-        // Use JSON.parse to decode escape sequences like \u003C into actual characters
-        return JSON.parse(`"${escapedHtml.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
-    } catch (e) {
-        console.error("Failed to decode HTML:", e);
-        return escapedHtml;
-    }
 }
 
 let isTab = false;
