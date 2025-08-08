@@ -96,7 +96,7 @@ function getData() {
 
     if (!dist) {
       console.warn('Distance element not found');
-      sendResponse({ error: 'Distance element not found' });
+      //sendResponse({ error: 'Distance element not found' });
       return;
     }
     
@@ -106,11 +106,13 @@ function getData() {
 
     if (!conditionEl) {
       console.warn('Condition element not found');
-      sendResponse({ error: 'Condition element not found' });
-      return;
+      //sendResponse({ error: 'Condition element not found' });
+      //return;
     }
-    const conditionStr = conditionEl.textContent || conditionEl.innerText || "";
-    let condition = conditionStr.replace(/[^a-zA-Z]/g, '').toLowerCase();
+    
+    const conditionStr = conditionEl?.textContent || conditionEl?.innerText || "";
+    
+    let condition = conditionStr?.replace(/[^a-zA-Z]/g, '').toLowerCase();
 
     condition = condition == "hvy" ? "heavy" : condition;
 
@@ -416,8 +418,8 @@ function getRunner(runnerNameEl, rowEl, meters, condition) {
     }
 
     const adjTimeDistOnly = adjustTimeByDistance(currTime, currDistance, meters);
-    const adjTimeAndWeight = isTab ? adjustTimeForWeightDifference(adjTimeDistOnly, currWeight, weight, meters, condition) : adjTimeDistOnly;
-    const adjTimeDistAndCondOnly = adjTimeAndWeight != null ? adjustTimeForCondition(adjTimeAndWeight, currCondition, condition, meters) : null;
+    const adjTimeDistAndCondOnly = adjTimeDistOnly != null ? adjustTimeForCondition(adjTimeDistOnly, currCondition, condition, meters) : null;
+    const adjTimeWithWeight = (adjTimeDistAndCondOnly && isTab) ? adjustTimeForWeightDifference(adjTimeDistAndCondOnly, currWeight, weight, meters, condition) : adjTimeDistAndCondOnly;
 
     const run = {
       number,
@@ -435,6 +437,10 @@ function getRunner(runnerNameEl, rowEl, meters, condition) {
       time: currTime,
       adjTimeDistOnly,
       adjTimeDistAndCondOnly,
+      adjTimeWithWeight,
+      distMps: meters / adjTimeDistOnly,
+      distAndCondMps: meters / adjTimeDistAndCondOnly,
+      distCondAndWeightMps: meters / adjTimeWithWeight,
       isRelevantDistance: isDistanceCloseEnough(currDistance, meters)
     }
 
@@ -487,6 +493,8 @@ function getRunner(runnerNameEl, rowEl, meters, condition) {
     marginValue: bestMargin,
     place: bestPlace
   };
+
+  adjustForWeightSensitivity(runner);//Ensure weight adjustment is correct based on horse's ability to carry a different weight
 
   runner.scoreWeights = getDynamicWeights(meters, condition);
   runner.timeStableScore = getTimeStabilityScore(runner.runs, true);
@@ -2203,6 +2211,7 @@ function calculateCompetitiveScore(run) {
 
     return Math.round(baseScore * 10) / 10;
 }
+
 // Adjust time based on condition and distance
 // Adjusted time function using delta between run condition and current race condition
 function adjustTimeForCondition(time, runCondition, currentCondition, distance) {
@@ -2251,6 +2260,37 @@ function adjustTimeForWeightDifference(time, runWeight, currWeight, distance, co
   const adjustment = weightDiff * perMeterPenalty * distance;
 
   return time + adjustment;
+}
+
+function adjustForWeightSensitivity(runner) {
+  const currentWeight = runner.weight;
+  const runs = runner.runs;
+
+  const similarWeightRuns = runs.filter(r => 
+    Math.abs(r.weight - currentWeight) <= 1 && r.weight !== currentWeight
+  );
+
+  const avgMpsAtCurrentWeight = similarWeightRuns.length
+    ? similarWeightRuns.reduce((sum, r) => sum + r.distAndCondMps, 0) / similarWeightRuns.length
+    : null;
+
+  if (!avgMpsAtCurrentWeight) return runner;
+
+  const THRESHOLD_PCT = 0.02; // 2%
+
+  runs.forEach(run => {
+    if (run.weight === currentWeight) return;
+
+    const mpsDiff = run.distAndCondMps - avgMpsAtCurrentWeight;
+    const percentDiff = Math.abs(mpsDiff) / avgMpsAtCurrentWeight;
+
+    if (percentDiff <= THRESHOLD_PCT) {
+      run.adjTimeWithWeight = run.adjTimeDistAndCondOnly;
+      run.distCondAndWeightMps = run.distAndCondMps;
+    }
+  });
+
+  return runner;
 }
 
 function estimateFinishingSpeed(distance, { adjTimeDistOnly, adjTimeDistAndCondOnly }) {
@@ -2331,7 +2371,7 @@ function getSignedMargin(run) {
 
   const maxNegativeMargin = 15; // cap losing margin at -15 lengths
 
-  if (place === 1) {
+  if (place === 1 || placeStr.toLowerCase().indexOf("win") > 0) {
     return run.margin; // positive margin if won
   } else if (run.margin == 0 && place !== 1) {
     return -maxNegativeMargin;
@@ -2838,9 +2878,9 @@ function populateTopRuns(runs) {
       <td class="runner-cell bold-text runnerName" data-number="${escapeHtml(run.number)}">${escapeHtml(run.name)}</td>
       <td>${escapeHtml(run.odds?.fixed?.display)}</td>
       <td>${escapeHtml(run.time?.toFixed(2))}</td>
-      <td>${escapeHtml(run.adjTimeDistAndCondOnly?.toFixed(2))}</td>
+      <td>${escapeHtml(run.adjTimeWithWeight?.toFixed(2))}</td>
       <td>${escapeHtml(run.finishingSpeed?.fromAdjDist?.mps?.toFixed(2))}</td>
-      <td class="${run.weightClass}">${escapeHtml(run.weight ? run.weight : '')}</td>
+      <td class="${run.weightClass}">${escapeHtml(run.weight ? run.weight : '') + (run.weightToday ? ' ('+ run.weightToday +')' : '')}</td>
       <td>${escapeHtml(run.date)}</td>
       <td>${escapeHtml(run.placeValue)}</td>
       <td>${escapeHtml(run.distance)}</td>
@@ -3062,11 +3102,11 @@ function addRunnerOnClick(results) {
         runRow.innerHTML = `
           <td>${escapeHtml(run.date)}</td>
           <td>${escapeHtml(run.time?.toFixed(2))}</td>
-          <td>${run.isRelevantDistance ? escapeHtml(run.adjTimeDistAndCondOnly?.toFixed(2)) : ''}</td>
+          <td>${run.isRelevantDistance ? escapeHtml(run.adjTimeWithWeight?.toFixed(2)) : ''}</td>
           <td>${run.competitiveScore ? escapeHtml(run.competitiveScore) : ''}</td>
           <td>${escapeHtml(run.distance)}</td>
           <td>${escapeHtml(run.condition)}</td>
-          <td class="${run.weightClass}">${escapeHtml(run.weight ? run.weight : '')}</td>
+          <td class="${run.weightClass}">${escapeHtml(run.weight ? run.weight : '') + (run.weightToday ? ' ('+ run.weightToday +')' : '')}</td>
           <td>${escapeHtml(run.marginValue)}</td>
           <td>${escapeHtml(run.place)}</td>
         `;
